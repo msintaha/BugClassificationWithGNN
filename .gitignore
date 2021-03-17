@@ -1,0 +1,6 @@
+.idea
+.DS_Store
+binOps_training/*
+binOps_eval/*
+calls_training/*
+calls_eval/*
