@@ -62,17 +62,17 @@ LABELS = {
 
 
 class CorrectAndBuggyDataset(DGLDataset):
-    def __init__(self, with_pretrained_embeddings=True, is_training=True):
+    def __init__(self, use_deepbugs_embeddings=True, is_training=True):
         self.file_to_operands = dict()
         self.all_operators = None
         self.graphs = []
         self.labels = []
-        self.with_pretrained_embeddings = with_pretrained_embeddings
+        self.use_deepbugs_embeddings = use_deepbugs_embeddings
         self.is_training = is_training
 
         super().__init__(name='synthetic')
         
-
+    ## This is for determining all possible operator types to specify the length of operator vector
     def pre_scan_binOps(self, first_data_paths, second_data_paths=[]):
         all_operators_set = set()
         for bin_op in first_data_paths:
@@ -112,7 +112,7 @@ class CorrectAndBuggyDataset(DGLDataset):
         return th.stack(data)
         
 
-    def binOps_code_to_xy_pairs(self):
+    def generate_graphs_from_binOps_ast(self):
         num_nodes = 7
         
         dataset = binOps_training if self.is_training else binOps_eval
@@ -141,7 +141,7 @@ class CorrectAndBuggyDataset(DGLDataset):
                 th.tensor(token_vectors[left]),
                 th.tensor(type_vectors[right_type]),
                 th.tensor(token_vectors[right]),
-            ] if self.with_pretrained_embeddings else self.generate_random_embedding(num_nodes)
+            ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
             
             g = dgl.graph(binOps_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(correct_vector)
@@ -167,7 +167,7 @@ class CorrectAndBuggyDataset(DGLDataset):
                 th.tensor(token_vectors[left]),
                 th.tensor(type_vectors[right_type]),
                 th.tensor(token_vectors[right]),
-            ] if self.with_pretrained_embeddings else self.generate_random_embedding(num_nodes)
+            ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
             
             g = dgl.graph(binOps_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(incorrect_bin_ops_vector)
@@ -183,7 +183,7 @@ class CorrectAndBuggyDataset(DGLDataset):
                 th.tensor(token_vectors[right]),
                 th.tensor(type_vectors[left_type]),
                 th.tensor(token_vectors[left]),
-            ] if self.with_pretrained_embeddings else self.generate_random_embedding(num_nodes)
+            ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
                           
             g = dgl.graph(binOps_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(swapped_bin_operands_vector)
@@ -221,7 +221,7 @@ class CorrectAndBuggyDataset(DGLDataset):
                     th.tensor(other_operand_vector),
                     th.tensor(type_vectors[right_type]),
                     th.tensor(token_vectors[right]),
-                ] if self.with_pretrained_embeddings else self.generate_random_embedding(num_nodes)
+                ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
             else:
                 incorrect_bin_operands_vector = [
                     th.tensor(node_type_vectors[grand_parent]),
@@ -231,7 +231,7 @@ class CorrectAndBuggyDataset(DGLDataset):
                     th.tensor(token_vectors[left]),
                     th.tensor(other_operand_type_vector),
                     th.tensor(other_operand_vector),
-                ] if self.with_pretrained_embeddings else self.generate_random_embedding(num_nodes)
+                ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
 
             g = dgl.graph(binOps_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(incorrect_bin_operands_vector)
@@ -239,7 +239,7 @@ class CorrectAndBuggyDataset(DGLDataset):
             self.labels.append(LABELS['incorrect_binary_operands'])
         
 
-    def calls_code_to_xy_pairs(self):
+    def generate_graphs_from_calls_ast(self):
         num_nodes = 8
         
         dataset = calls_training if self.is_training else calls_eval
@@ -288,7 +288,7 @@ class CorrectAndBuggyDataset(DGLDataset):
                 th.tensor(parameter1_vector),
                 th.tensor(argument1_type_vector),
                 th.tensor(argument1_vector),
-            ] if self.with_pretrained_embeddings else self.generate_random_embedding(num_nodes)
+            ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
             
             g = dgl.graph(calls_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(correct_vector)
@@ -305,7 +305,7 @@ class CorrectAndBuggyDataset(DGLDataset):
                 th.tensor(parameter1_vector),
                 th.tensor(argument0_type_vector),
                 th.tensor(argument0_vector),
-            ] if self.with_pretrained_embeddings else self.generate_random_embedding(num_nodes)
+            ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
 
             g = dgl.graph(calls_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(swapped_args_vector)
@@ -315,8 +315,8 @@ class CorrectAndBuggyDataset(DGLDataset):
 
     def process(self):
         self.pre_scan_binOps(binOps_training, binOps_eval)
-        self.binOps_code_to_xy_pairs()
-        self.calls_code_to_xy_pairs()
+        self.generate_graphs_from_binOps_ast()
+        self.generate_graphs_from_calls_ast()
         
         random.shuffle(self.graphs)
         self.labels = th.LongTensor(self.labels)
@@ -409,9 +409,9 @@ class Classifier(nn.Module):
 import torch.optim as optim
 from torch.utils.data import DataLoader
 # Create training and test sets.
-trainset = CorrectAndBuggyDataset(with_pretrained_embeddings=False, is_training=True)
-testset = CorrectAndBuggyDataset(with_pretrained_embeddings=False, is_training=False)
-print(testset)
+trainset = CorrectAndBuggyDataset(use_deepbugs_embeddings=False, is_training=True)
+testset = CorrectAndBuggyDataset(use_deepbugs_embeddings=False, is_training=False)
+
 # Use PyTorch's DataLoader and the collate function
 # defined before.
 data_loader = DataLoader(trainset, batch_size=100, shuffle=True,
