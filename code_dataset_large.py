@@ -38,15 +38,17 @@ with open(calls_validation_data_paths) as f:
 ### Create graph tuples of positive and negative examples from word2vec embeddings
 
 import dgl
+import os
 import torch as th
 import random
 
 from dgl.data import DGLDataset
+from dgl.data.utils import save_graphs, load_graphs
 from collections import namedtuple
 
 
-binOps_graph = ([0, 1, 2, 3, 2, 5], [1, 2, 3, 4, 5, 6])
-calls_graph = ([0, 1, 2, 3, 1, 5, 6], [1, 2, 3, 4, 5, 6, 7])
+binOps_graph = ([0, 1, 1, 1, 3, 4, 2, 5], [1, 2, 3, 5, 4, 2, 6, 6])
+calls_graph = ([0, 1, 1, 2, 2, 3, 5, 6, 4], [1, 2, 5, 5, 3, 4, 6, 7, 7])
 operator_embedding_size = 30
 name_embedding_size = 200
 type_embedding_size = 5
@@ -54,21 +56,21 @@ Operand = namedtuple('Operand', ['op', 'type'])
 LABELS = {
     'correct_binary_op': 0,
     'incorrect_binary_operator': 1,
-    'swapped_binary_operands': 2,
-    'incorrect_binary_operands': 3,
+    'incorrect_binary_operand': 2,
     'correct_args': 4,
     'swapped_args': 5,
 }
 
 
 class CorrectAndBuggyDataset(DGLDataset):
-    def __init__(self, use_deepbugs_embeddings=True, is_training=True):
+    def __init__(self, use_deepbugs_embeddings=True, is_training=True, bug_type='incorrect_binary_operator'):
         self.file_to_operands = dict()
         self.all_operators = None
         self.graphs = []
         self.labels = []
         self.use_deepbugs_embeddings = use_deepbugs_embeddings
         self.is_training = is_training
+        self.bug_type = bug_type
 
         super().__init__(name='synthetic')
         
@@ -101,7 +103,7 @@ class CorrectAndBuggyDataset(DGLDataset):
 
     
     def generate_random_embedding(self, num_nodes):
-        return th.randn(num_nodes, 5)
+        return th.randn(num_nodes, name_embedding_size)
     
     
     def get_tensor_feature(self, data):
@@ -146,97 +148,83 @@ class CorrectAndBuggyDataset(DGLDataset):
             g = dgl.graph(binOps_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(correct_vector)
             self.graphs.append(g)
-            self.labels.append(LABELS['correct_binary_op'])
+            self.labels.append(0)
             
             ## Incorrect binary operator
-            other_operator = None
-            other_operator_vector = None
+            if self.bug_type == 'incorrect_binary_operator':
+                other_operator = None
+                other_operator_vector = None
 
-            while other_operator_vector == None:
-                other_operator = random.choice(self.all_operators)
-                if other_operator != operator:
-                    other_operator_vector = [0] * operator_embedding_size
-                    other_operator_vector[self.all_operators.index(
-                        other_operator)] = 1
-            
-            incorrect_bin_ops_vector = [
-                th.tensor(node_type_vectors[grand_parent]),
-                th.tensor(node_type_vectors[parent]),
-                th.tensor(other_operator_vector),
-                th.tensor(type_vectors[left_type]),
-                th.tensor(token_vectors[left]),
-                th.tensor(type_vectors[right_type]),
-                th.tensor(token_vectors[right]),
-            ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
-            
-            g = dgl.graph(binOps_graph, num_nodes=num_nodes)
-            g.ndata['features'] = self.get_tensor_feature(incorrect_bin_ops_vector)
-            self.graphs.append(g)
-            self.labels.append(LABELS['incorrect_binary_operator'])
-                          
-            ## Swapped binary operands
-            swapped_bin_operands_vector = [
-                th.tensor(node_type_vectors[grand_parent]),
-                th.tensor(node_type_vectors[parent]),
-                th.tensor(operator_vector),
-                th.tensor(type_vectors[right_type]),
-                th.tensor(token_vectors[right]),
-                th.tensor(type_vectors[left_type]),
-                th.tensor(token_vectors[left]),
-            ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
-                          
-            g = dgl.graph(binOps_graph, num_nodes=num_nodes)
-            g.ndata['features'] = self.get_tensor_feature(swapped_bin_operands_vector)
-            self.graphs.append(g)
-            self.labels.append(LABELS['swapped_binary_operands'])
-            
-            ## Wrong binary operand
-            replace_left = random.random() < 0.5
-            if replace_left:
-                to_replace_operand = left
-            else:
-                to_replace_operand = right
-            file = src.split(" : ")[0]
-            all_operands = self.file_to_operands[file]
-            tries_left = 100
-            found = False
-            while (not found) and tries_left > 0:
-                other_operand = random.choice(list(all_operands))
-                if other_operand.op in token_vectors and other_operand.op != to_replace_operand:
-                    found = True
-                tries_left -= 1
+                while other_operator_vector == None:
+                    other_operator = random.choice(self.all_operators)
+                    if other_operator != operator:
+                        other_operator_vector = [0] * operator_embedding_size
+                        other_operator_vector[self.all_operators.index(
+                            other_operator)] = 1
 
-            if not found:
-                return
-
-            other_operand_vector = token_vectors[other_operand.op]
-            other_operand_type_vector = type_vectors[other_operand.type]
-            
-            if replace_left:
-                incorrect_bin_operands_vector = [
+                incorrect_bin_ops_vector = [
                     th.tensor(node_type_vectors[grand_parent]),
                     th.tensor(node_type_vectors[parent]),
-                    th.tensor(operator_vector),
-                    th.tensor(other_operand_type_vector),
-                    th.tensor(other_operand_vector),
+                    th.tensor(other_operator_vector),
+                    th.tensor(type_vectors[left_type]),
+                    th.tensor(token_vectors[left]),
                     th.tensor(type_vectors[right_type]),
                     th.tensor(token_vectors[right]),
                 ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
-            else:
-                incorrect_bin_operands_vector = [
-                    th.tensor(node_type_vectors[grand_parent]),
-                    th.tensor(node_type_vectors[parent]),
-                    th.tensor(operator_vector),
-                    th.tensor(type_vectors[left_type]),
-                    th.tensor(token_vectors[left]),
-                    th.tensor(other_operand_type_vector),
-                    th.tensor(other_operand_vector),
-                ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
 
-            g = dgl.graph(binOps_graph, num_nodes=num_nodes)
-            g.ndata['features'] = self.get_tensor_feature(incorrect_bin_operands_vector)
-            self.graphs.append(g)
-            self.labels.append(LABELS['incorrect_binary_operands'])
+                g = dgl.graph(binOps_graph, num_nodes=num_nodes)
+                g.ndata['features'] = self.get_tensor_feature(incorrect_bin_ops_vector)
+                self.graphs.append(g)
+                self.labels.append(1)
+
+            ## Wrong binary operand
+            elif self.bug_type == 'incorrect_binary_operand':
+                replace_left = random.random() < 0.5
+                if replace_left:
+                    to_replace_operand = left
+                else:
+                    to_replace_operand = right
+                file = src.split(" : ")[0]
+                all_operands = self.file_to_operands[file]
+                tries_left = 100
+                found = False
+                while (not found) and tries_left > 0:
+                    other_operand = random.choice(list(all_operands))
+                    if other_operand.op in token_vectors and other_operand.op != to_replace_operand:
+                        found = True
+                    tries_left -= 1
+
+                if not found:
+                    return
+
+                other_operand_vector = token_vectors[other_operand.op]
+                other_operand_type_vector = type_vectors[other_operand.type]
+
+                if replace_left:
+                    incorrect_bin_operands_vector = [
+                        th.tensor(node_type_vectors[grand_parent]),
+                        th.tensor(node_type_vectors[parent]),
+                        th.tensor(operator_vector),
+                        th.tensor(other_operand_type_vector),
+                        th.tensor(other_operand_vector),
+                        th.tensor(type_vectors[right_type]),
+                        th.tensor(token_vectors[right]),
+                    ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
+                else:
+                    incorrect_bin_operands_vector = [
+                        th.tensor(node_type_vectors[grand_parent]),
+                        th.tensor(node_type_vectors[parent]),
+                        th.tensor(operator_vector),
+                        th.tensor(type_vectors[left_type]),
+                        th.tensor(token_vectors[left]),
+                        th.tensor(other_operand_type_vector),
+                        th.tensor(other_operand_vector),
+                    ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
+
+                g = dgl.graph(binOps_graph, num_nodes=num_nodes)
+                g.ndata['features'] = self.get_tensor_feature(incorrect_bin_operands_vector)
+                self.graphs.append(g)
+                self.labels.append(1)
         
 
     def generate_graphs_from_calls_ast(self):
@@ -293,7 +281,7 @@ class CorrectAndBuggyDataset(DGLDataset):
             g = dgl.graph(calls_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(correct_vector)
             self.graphs.append(g)
-            self.labels.append(LABELS['correct_args'])
+            self.labels.append(0)
             
             ## Swapped args
             swapped_args_vector = [
@@ -310,16 +298,33 @@ class CorrectAndBuggyDataset(DGLDataset):
             g = dgl.graph(calls_graph, num_nodes=num_nodes)
             g.ndata['features'] = self.get_tensor_feature(swapped_args_vector)
             self.graphs.append(g)
-            self.labels.append(LABELS['swapped_args'])
+            self.labels.append(1)
     
+    @property
+    def dataset_type(self):
+        return 'training' if self.is_training else 'eval'
 
     def process(self):
-        self.pre_scan_binOps(binOps_training, binOps_eval)
-        self.generate_graphs_from_binOps_ast()
-        self.generate_graphs_from_calls_ast()
-        
-        random.shuffle(self.graphs)
-        self.labels = th.LongTensor(self.labels)
+        filepath = './data/large_graph_data_{}_{}_{}.bin'.format(
+            self.dataset_type,
+            'deepbugs' if self.use_deepbugs_embeddings else 'random',
+            self.bug_type
+        )
+        if os.path.exists(filepath):
+            print('----Loading {} graph data----'.format(self.dataset_type))
+            self.graphs, label_dict = load_graphs(filepath)
+            self.labels = label_dict['labels']
+        else:
+            print('----Saving {} graph data----'.format(self.dataset_type))
+            if self.bug_type in ['incorrect_binary_operator', 'incorrect_binary_operand']:
+                self.pre_scan_binOps(binOps_training, binOps_eval)
+                self.generate_graphs_from_binOps_ast()
+            elif self.bug_type == 'swapped_args':
+                self.generate_graphs_from_calls_ast()
+
+            random.shuffle(self.graphs)
+            self.labels = th.LongTensor(self.labels)
+            save_graphs(filepath, self.graphs, {'labels': self.labels})
 
 
     def __getitem__(self, i):
@@ -328,11 +333,11 @@ class CorrectAndBuggyDataset(DGLDataset):
 
     def __len__(self):
         return len(self.graphs)
-    
+
     @property
     def num_classes(self):
         """Number of classes."""
-        return 6
+        return 2
 
 
 ####################################################################################
@@ -393,13 +398,14 @@ class Classifier(nn.Module):
 
       self.layers = nn.ModuleList([
           GCN(in_dim, hidden_dim, F.relu),
+          GCN(hidden_dim, hidden_dim, F.relu),
           GCN(hidden_dim, hidden_dim, F.relu)])
       self.classify = nn.Linear(hidden_dim, n_classes)
 
   def forward(self, g):
       # For undirected graphs, in_degree is the same as
       # out_degree.
-      h = g.in_degrees().view(-1, 1).float()
+      h = g.ndata['features']
       for conv in self.layers:
           h = conv(g, h)
       g.ndata['features'] = h
@@ -409,8 +415,8 @@ class Classifier(nn.Module):
 import torch.optim as optim
 from torch.utils.data import DataLoader
 # Create training and test sets.
-trainset = CorrectAndBuggyDataset(use_deepbugs_embeddings=False, is_training=True)
-testset = CorrectAndBuggyDataset(use_deepbugs_embeddings=False, is_training=False)
+trainset = CorrectAndBuggyDataset(use_deepbugs_embeddings=True, is_training=True, bug_type='incorrect_binary_operator')
+testset = CorrectAndBuggyDataset(use_deepbugs_embeddings=True, is_training=False, bug_type='incorrect_binary_operator')
 
 # Use PyTorch's DataLoader and the collate function
 # defined before.
@@ -418,13 +424,13 @@ data_loader = DataLoader(trainset, batch_size=100, shuffle=True,
                          collate_fn=collate)
 
 # Create model
-model = Classifier(1, 256, trainset.num_classes)
+model = Classifier(name_embedding_size, 256, trainset.num_classes)
 loss_func = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.005)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 model.train()
 
 epoch_losses = []
-for epoch in range(100):
+for epoch in range(20):
     epoch_loss = 0
     for iter, (bg, label) in enumerate(data_loader):
         prediction = model(bg)
