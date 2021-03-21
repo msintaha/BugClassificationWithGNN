@@ -14,25 +14,25 @@ binOps_training = None
 binOps_eval = None
 calls_training = None
 
-with open('./token_to_vector/token_to_vector_150.json') as f:
+with open('./token_to_vector/token_to_vector_150.json', encoding='utf-8') as f:
   token_vectors = json.load(f)
 
-with open('./type_to_vector.json') as f:
+with open('./type_to_vector.json', encoding='utf-8') as f:
   type_vectors = json.load(f)
 
-with open('./node_type_to_vector.json') as f:
+with open('./node_type_to_vector.json', encoding='utf-8') as f:
   node_type_vectors = json.load(f)
 
-with open(binOps_training_data_paths) as f:
+with open(binOps_training_data_paths, encoding='utf-8') as f:
   binOps_training = json.load(f)
 
-with open(calls_training_data_paths) as f:
+with open(calls_training_data_paths, encoding='utf-8') as f:
   calls_training = json.load(f)
 
-with open(binOps_validation_data_paths) as f:
+with open(binOps_validation_data_paths, encoding='utf-8') as f:
   binOps_eval = json.load(f)
 
-with open(calls_validation_data_paths) as f:
+with open(calls_validation_data_paths, encoding='utf-8') as f:
   calls_eval = json.load(f)
 
 ### Create graph tuples of positive and negative examples from word2vec embeddings
@@ -414,49 +414,68 @@ class Classifier(nn.Module):
 
 import torch.optim as optim
 from torch.utils.data import DataLoader
-# Create training and test sets.
-trainset = CorrectAndBuggyDataset(use_deepbugs_embeddings=True, is_training=True, bug_type='incorrect_binary_operator')
-testset = CorrectAndBuggyDataset(use_deepbugs_embeddings=True, is_training=False, bug_type='incorrect_binary_operator')
 
-# Use PyTorch's DataLoader and the collate function
-# defined before.
-data_loader = DataLoader(trainset, batch_size=100, shuffle=True,
-                         collate_fn=collate)
+def main(bug_type, use_deepbugs_embeddings):
+    print('----Training bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
+    # Create training and test sets.
+    trainset = CorrectAndBuggyDataset(use_deepbugs_embeddings=True, is_training=True, bug_type='incorrect_binary_operator')
+    testset = CorrectAndBuggyDataset(use_deepbugs_embeddings=True, is_training=False, bug_type='incorrect_binary_operator')
 
-# Create model
-model = Classifier(name_embedding_size, 256, trainset.num_classes)
-loss_func = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-model.train()
+    # Use PyTorch's DataLoader and the collate function
+    # defined before.
+    data_loader = DataLoader(trainset, batch_size=100, shuffle=True,
+                            collate_fn=collate)
 
-epoch_losses = []
-for epoch in range(20):
-    epoch_loss = 0
-    for iter, (bg, label) in enumerate(data_loader):
-        prediction = model(bg)
-        loss = loss_func(prediction, label)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        epoch_loss += loss.detach().item()
-    epoch_loss /= (iter + 1)
-    print('Epoch {}, loss {:.4f}'.format(epoch, epoch_loss))
-    epoch_losses.append(epoch_loss)
+    # Create model
+    model = Classifier(name_embedding_size, 256, trainset.num_classes)
+    loss_func = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    model.train()
 
-## Evaluate model
+    epoch_losses = []
+    for epoch in range(20):
+        epoch_loss = 0
+        for iter, (bg, label) in enumerate(data_loader):
+            prediction = model(bg)
+            loss = loss_func(prediction, label)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.detach().item()
+        epoch_loss /= (iter + 1)
+        print('Epoch {}, loss {:.4f}'.format(epoch, epoch_loss))
+        epoch_losses.append(epoch_loss)
 
-model.eval()
-# Convert a list of tuples to two lists
-test_X, test_Y = map(list, zip(*testset))
-test_bg = dgl.batch(test_X)
-test_Y = torch.tensor(test_Y).float().view(-1, 1)
-probs_Y = torch.softmax(model(test_bg), 1)
-sampled_Y = torch.multinomial(probs_Y, 1)
-argmax_Y = torch.max(probs_Y, 1)[1].view(-1, 1)
-print('Accuracy of sampled predictions on the test set: {:.4f}%'.format(
-    (test_Y == sampled_Y.float()).sum().item() / len(test_Y) * 100))
-print('Accuracy of argmax predictions on the test set: {:4f}%'.format(
-    (test_Y == argmax_Y.float()).sum().item() / len(test_Y) * 100))
+    ## Evaluate model
+
+    model.eval()
+    # Convert a list of tuples to two lists
+    test_X, test_Y = map(list, zip(*testset))
+    test_bg = dgl.batch(test_X)
+    test_Y = torch.tensor(test_Y).float().view(-1, 1)
+    probs_Y = torch.softmax(model(test_bg), 1)
+    sampled_Y = torch.multinomial(probs_Y, 1)
+    argmax_Y = torch.max(probs_Y, 1)[1].view(-1, 1)
+    print('Accuracy of sampled predictions on the test set: {:.4f}%'.format(
+        (test_Y == sampled_Y.float()).sum().item() / len(test_Y) * 100))
+    print('Accuracy of argmax predictions on the test set: {:4f}%'.format(
+        (test_Y == argmax_Y.float()).sum().item() / len(test_Y) * 100))
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--bug_type", help="Type of bug to train", choices=["swapped_args", "incorrect_binary_operator", "incorrect_binary_operand"], required=True)
+parser.add_argument(
+    "--use_deepbugs_embeddings", help="Random or deepbugs embeddings", required=False)
+
+
+if __name__=="__main__": 
+    args = parser.parse_args()
+    bug_type = args.bug_type
+    use_deepbugs_embeddings = True if args.use_deepbugs_embeddings else False
+    main(bug_type, use_deepbugs_embeddings) 
+
 
 # With word2vec
 # Accuracy of sampled predictions on the test set: 43.8165%
