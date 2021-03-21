@@ -13,28 +13,6 @@ node_type_vectors = None
 binOps_training = None
 binOps_eval = None
 calls_training = None
-
-with open('./token_to_vector/token_to_vector_all_tokens.json', encoding='utf-8') as f:
-  token_vectors = json.load(f)
-
-with open('./type_to_vector.json', encoding='utf-8') as f:
-  type_vectors = json.load(f)
-
-with open('./node_type_to_vector.json', encoding='utf-8') as f:
-  node_type_vectors = json.load(f)
-
-with open(binOps_training_data_paths, encoding='utf-8') as f:
-  binOps_training = json.load(f)
-
-with open(calls_training_data_paths, encoding='utf-8') as f:
-  calls_training = json.load(f)
-
-with open(binOps_validation_data_paths, encoding='utf-8') as f:
-  binOps_eval = json.load(f)
-
-with open(calls_validation_data_paths, encoding='utf-8') as f:
-  calls_eval = json.load(f)
-
 ### Create graph tuples of positive and negative examples from word2vec embeddings
 
 import dgl
@@ -417,8 +395,30 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 def main(bug_type, use_deepbugs_embeddings):
-    # Create training and test sets.
     print('----Training bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
+
+    with open('./token_to_vector/token_to_vector_all_tokens.json', encoding='utf-8') as f:
+        token_vectors = json.load(f)
+
+    with open('./type_to_vector.json', encoding='utf-8') as f:
+        type_vectors = json.load(f)
+
+    with open('./node_type_to_vector.json', encoding='utf-8') as f:
+        node_type_vectors = json.load(f)
+
+    with open(binOps_training_data_paths, encoding='utf-8') as f:
+        binOps_training = json.load(f)
+
+    with open(calls_training_data_paths, encoding='utf-8') as f:
+        calls_training = json.load(f)
+
+    with open(binOps_validation_data_paths, encoding='utf-8') as f:
+        binOps_eval = json.load(f)
+
+    with open(calls_validation_data_paths, encoding='utf-8') as f:
+        calls_eval = json.load(f)
+
+    # Create training and test sets.
     trainset = CorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
     testset = CorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
 
