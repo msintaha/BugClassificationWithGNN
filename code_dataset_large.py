@@ -58,8 +58,9 @@ Operand = namedtuple('Operand', ['op', 'type'])
 LABELS = {
     'correct_binary_op': 0,
     'incorrect_binary_operand': 1,
-    'correct_args': 2,
-    'swapped_args': 3,
+    'incorrect_binary_operator': 2,
+    'correct_args': 3,
+    'swapped_args': 4,
 }
 
 
@@ -152,31 +153,31 @@ class CorrectAndBuggyDataset(DGLDataset):
             self.labels.append(LABELS['correct_binary_op'] if self.bug_type == 'all' else 0)
             
             ## Incorrect binary operator
-            # if self.bug_type in ['incorrect_binary_operator', 'all']:
-            #     other_operator = None
-            #     other_operator_vector = None
+            if self.bug_type in ['incorrect_binary_operator', 'all']:
+                other_operator = None
+                other_operator_vector = None
 
-            #     while other_operator_vector == None:
-            #         other_operator = random.choice(self.all_operators)
-            #         if other_operator != operator:
-            #             other_operator_vector = [0] * operator_embedding_size
-            #             other_operator_vector[self.all_operators.index(
-            #                 other_operator)] = 1
+                while other_operator_vector == None:
+                    other_operator = random.choice(self.all_operators)
+                    if other_operator != operator:
+                        other_operator_vector = [0] * operator_embedding_size
+                        other_operator_vector[self.all_operators.index(
+                            other_operator)] = 1
 
-            #     incorrect_bin_ops_vector = [
-            #         th.tensor(node_type_vectors[grand_parent]),
-            #         th.tensor(node_type_vectors[parent]),
-            #         th.tensor(other_operator_vector),
-            #         th.tensor(type_vectors[left_type]),
-            #         th.tensor(token_vectors[left]),
-            #         th.tensor(type_vectors[right_type]),
-            #         th.tensor(token_vectors[right]),
-            #     ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
+                incorrect_bin_ops_vector = [
+                    th.tensor(node_type_vectors[grand_parent]),
+                    th.tensor(node_type_vectors[parent]),
+                    th.tensor(other_operator_vector),
+                    th.tensor(type_vectors[left_type]),
+                    th.tensor(token_vectors[left]),
+                    th.tensor(type_vectors[right_type]),
+                    th.tensor(token_vectors[right]),
+                ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
 
-            #     g = dgl.graph(binOps_graph, num_nodes=num_nodes)
-            #     g.ndata['features'] = self.get_tensor_feature(incorrect_bin_ops_vector)
-            #     self.graphs.append(g)
-            #     self.labels.append(LABELS['incorrect_binary_operator'] if self.bug_type == 'all' else 1)
+                g = dgl.graph(binOps_graph, num_nodes=num_nodes)
+                g.ndata['features'] = self.get_tensor_feature(incorrect_bin_ops_vector)
+                self.graphs.append(g)
+                self.labels.append(LABELS['incorrect_binary_operator'] if self.bug_type == 'all' else 1)
 
             ## Wrong binary operand
             if self.bug_type in ['incorrect_binary_operand', 'all']:
@@ -201,7 +202,6 @@ class CorrectAndBuggyDataset(DGLDataset):
                 other_operand_vector = token_vectors[other_operand.op]
                 other_operand_type_vector = type_vectors[other_operand.type]
 
-                num_nodes = 9
                 if replace_left:
                     incorrect_bin_operands_vector = [
                         th.tensor(node_type_vectors[grand_parent]),
@@ -211,8 +211,6 @@ class CorrectAndBuggyDataset(DGLDataset):
                         th.tensor(other_operand_vector),
                         th.tensor(type_vectors[right_type]),
                         th.tensor(token_vectors[right]),
-                        th.tensor(type_vectors[left_type]),
-                        th.tensor(token_vectors[left]),
                     ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
                 else:
                     incorrect_bin_operands_vector = [
@@ -223,11 +221,10 @@ class CorrectAndBuggyDataset(DGLDataset):
                         th.tensor(token_vectors[left]),
                         th.tensor(other_operand_type_vector),
                         th.tensor(other_operand_vector),
-                        th.tensor(type_vectors[right_type]),
-                        th.tensor(token_vectors[right]),
                     ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
 
-                g = dgl.graph(incorrect_bin_operand_graph, num_nodes=len(incorrect_bin_operands_vector))
+                g = dgl.graph(binOps_graph, num_nodes=num_nodes)
+
                 g.ndata['features'] = self.get_tensor_feature(incorrect_bin_operands_vector)
                 self.graphs.append(g)
                 self.labels.append(LABELS['incorrect_binary_operand'] if self.bug_type == 'all' else 1)
