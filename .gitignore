@@ -4,3 +4,4 @@ binOps_training/*
 binOps_eval/*
 calls_training/*
 calls_eval/*
+token_to_vector/*
