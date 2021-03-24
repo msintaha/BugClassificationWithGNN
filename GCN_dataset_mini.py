@@ -49,17 +49,19 @@ from collections import namedtuple
 
 binOps_graph = ([0, 1, 1, 1, 3, 4, 2, 5], [1, 2, 3, 5, 4, 2, 6, 6])
 calls_graph = ([0, 1, 1, 2, 2, 3, 5, 6, 4], [1, 2, 5, 5, 3, 4, 6, 7, 7])
+incorrect_bin_operand_graph = ([0, 1, 1, 1, 3, 4, 2, 5, 0, 7], [1, 2, 3, 5, 4, 2, 6, 6, 7, 8])
+# swapped_binOps_graph = ([0, 1, 1, 1, 3, 2, 6, 5], [1, 2, 3, 5, 4, 4, 2, 6])
+swapped_calls_graph = ([0, 1, 1, 2, 3, 5, 6, 5, 7], [1, 2, 5, 3, 4, 6, 7, 2, 4])
 operator_embedding_size = 30
 name_embedding_size = 200
 type_embedding_size = 5
 Operand = namedtuple('Operand', ['op', 'type'])
 LABELS = {
     'correct_binary_op': 0,
-    'incorrect_binary_operator': 1,
-    'swapped_binary_operands': 2,
-    'incorrect_binary_operands': 3,
-    'correct_args': 4,
-    'swapped_args': 5,
+    'incorrect_binary_operand': 1,
+    'incorrect_binary_operator': 2,
+    'correct_args': 3,
+    'swapped_args': 4
 }
 
 
@@ -146,13 +148,13 @@ class CorrectAndBuggyDataset(DGLDataset):
                 th.tensor(token_vectors[right]),
             ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
             
-            g = dgl.graph(binOps_graph, num_nodes=num_nodes)
+            g = dgl.graph(binOps_graph, num_nodes=len(correct_vector))
             g.ndata['features'] = self.get_tensor_feature(correct_vector)
             self.graphs.append(g)
-            self.labels.append(0)
+            self.labels.append(LABELS['correct_binary_op'] if self.bug_type == 'all' else 0)
             
             ## Incorrect binary operator
-            if self.bug_type == 'incorrect_binary_operator':
+            if self.bug_type in ['incorrect_binary_operator', 'all']:
                 other_operator = None
                 other_operator_vector = None
 
@@ -162,7 +164,7 @@ class CorrectAndBuggyDataset(DGLDataset):
                         other_operator_vector = [0] * operator_embedding_size
                         other_operator_vector[self.all_operators.index(
                             other_operator)] = 1
-                
+
                 incorrect_bin_ops_vector = [
                     th.tensor(node_type_vectors[grand_parent]),
                     th.tensor(node_type_vectors[parent]),
@@ -172,21 +174,20 @@ class CorrectAndBuggyDataset(DGLDataset):
                     th.tensor(type_vectors[right_type]),
                     th.tensor(token_vectors[right]),
                 ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
-                
+
                 g = dgl.graph(binOps_graph, num_nodes=num_nodes)
                 g.ndata['features'] = self.get_tensor_feature(incorrect_bin_ops_vector)
                 self.graphs.append(g)
-                self.labels.append(1)
-                print(g)
-            
+                self.labels.append(LABELS['incorrect_binary_operator'] if self.bug_type == 'all' else 1)
+
             ## Wrong binary operand
-            elif self.bug_type == 'incorrect_binary_operand':
+            if self.bug_type in ['incorrect_binary_operand', 'all']:
                 replace_left = random.random() < 0.5
                 if replace_left:
                     to_replace_operand = left
                 else:
                     to_replace_operand = right
-                file = src.split(" : ")[0]
+                file = src.split(' : ')[0]
                 all_operands = self.file_to_operands[file]
                 tries_left = 100
                 found = False
@@ -201,7 +202,7 @@ class CorrectAndBuggyDataset(DGLDataset):
 
                 other_operand_vector = token_vectors[other_operand.op]
                 other_operand_type_vector = type_vectors[other_operand.type]
-                
+
                 if replace_left:
                     incorrect_bin_operands_vector = [
                         th.tensor(node_type_vectors[grand_parent]),
@@ -224,10 +225,11 @@ class CorrectAndBuggyDataset(DGLDataset):
                     ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
 
                 g = dgl.graph(binOps_graph, num_nodes=num_nodes)
+
                 g.ndata['features'] = self.get_tensor_feature(incorrect_bin_operands_vector)
                 self.graphs.append(g)
-                self.labels.append(1)
-        
+                self.labels.append(LABELS['incorrect_binary_operand'] if self.bug_type == 'all' else 1)
+
 
     def generate_graphs_from_calls_ast(self):
         num_nodes = 8
@@ -280,10 +282,10 @@ class CorrectAndBuggyDataset(DGLDataset):
                 th.tensor(argument1_vector),
             ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
             
-            g = dgl.graph(calls_graph, num_nodes=num_nodes)
+            g = dgl.graph(calls_graph, num_nodes=len(correct_vector))
             g.ndata['features'] = self.get_tensor_feature(correct_vector)
             self.graphs.append(g)
-            self.labels.append(0)
+            self.labels.append(LABELS['correct_args'] if self.bug_type == 'all' else 0)
             
             ## Swapped args
             swapped_args_vector = [
@@ -297,10 +299,10 @@ class CorrectAndBuggyDataset(DGLDataset):
                 th.tensor(argument0_vector),
             ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
 
-            g = dgl.graph(calls_graph, num_nodes=num_nodes)
+            g = dgl.graph(swapped_calls_graph, num_nodes=len(swapped_args_vector))
             g.ndata['features'] = self.get_tensor_feature(swapped_args_vector)
             self.graphs.append(g)
-            self.labels.append(1)
+            self.labels.append(LABELS['swapped_args'] if self.bug_type == 'all' else 1)
     
     @property
     def dataset_type(self):
@@ -323,8 +325,11 @@ class CorrectAndBuggyDataset(DGLDataset):
                 self.generate_graphs_from_binOps_ast()
             elif self.bug_type == 'swapped_args':
                 self.generate_graphs_from_calls_ast()
-            
-            random.shuffle(self.graphs)
+            else:
+                self.pre_scan_binOps(binOps_training, binOps_eval)
+                self.generate_graphs_from_binOps_ast()
+                self.generate_graphs_from_calls_ast()
+
             self.labels = th.LongTensor(self.labels)
             save_graphs(filepath, self.graphs, {'labels': self.labels})
 
@@ -335,11 +340,11 @@ class CorrectAndBuggyDataset(DGLDataset):
 
     def __len__(self):
         return len(self.graphs)
-    
+
     @property
     def num_classes(self):
         """Number of classes."""
-        return 2
+        return len(LABELS) if self.bug_type == 'all' else 2
 
 
 ####################################################################################
@@ -356,7 +361,7 @@ def collate(samples):
 import dgl.function as fn
 import torch
 import torch.nn as nn
-
+from dgl.nn import GATConv
 
 # Sends a message of node feature h.
 msg = fn.copy_src(src='features', out='m')
@@ -393,7 +398,6 @@ class GCN(nn.Module):
 
 import torch.nn.functional as F
 
-
 class Classifier(nn.Module):
   def __init__(self, in_dim, hidden_dim, n_classes):
       super(Classifier, self).__init__()
@@ -414,27 +418,52 @@ class Classifier(nn.Module):
       hg = dgl.mean_nodes(g, 'features')
       return self.classify(hg)
 
+
 import torch.optim as optim
 from torch.utils.data import DataLoader
+# from torch_metrics import Accuracy, Precision, Recall
 
 def main(bug_type, use_deepbugs_embeddings):
-    # Create training and test sets.
     print('----Training bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
+    # Create training and test sets.
     trainset = CorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
     testset = CorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
 
     # Use PyTorch's DataLoader and the collate function
     # defined before.
-    data_loader = DataLoader(trainset, batch_size=100, shuffle=True, collate_fn=collate)
+    data_loader = DataLoader(trainset, batch_size=100, shuffle=True,
+                            collate_fn=collate)
+    
+    def evaluate():
+        ## Evaluate model
+        model.eval()
+        # Convert a list of tuples to two lists
+        test_X, test_Y = map(list, zip(*testset))
+        test_bg = dgl.batch(test_X)
+        # print('test_X', test_X)
+        # print('test_Y', test_Y)
+
+        test_Y = torch.tensor(test_Y).float().view(-1, 1)
+        model_output = model(test_bg)
+        print(model_output)
+        probs_Y = torch.softmax(model_output, 1)
+        # print('probs_Y', probs_Y)
+        sampled_Y = torch.multinomial(probs_Y, 1)
+        argmax_Y = torch.max(probs_Y, 1)[1].view(-1, 1)
+        print('Accuracy of sampled predictions on the test set: {:.4f}%'.format(
+            (test_Y == sampled_Y.float()).sum().item() / len(test_Y) * 100))
+        print('Accuracy of argmax predictions on the test set: {:4f}%'.format(
+            (test_Y == argmax_Y.float()).sum().item() / len(test_Y) * 100))
+
 
     # Create model
-    model = Classifier(name_embedding_size, 256, trainset.num_classes)
+    model = Classifier(name_embedding_size, 10, 5, trainset.num_classes)
     loss_func = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     model.train()
 
     epoch_losses = []
-    for epoch in range(30):
+    for epoch in range(10):
         epoch_loss = 0
         for iter, (bg, label) in enumerate(data_loader):
             prediction = model(bg)
@@ -446,36 +475,22 @@ def main(bug_type, use_deepbugs_embeddings):
         epoch_loss /= (iter + 1)
         print('Epoch {}, loss {:.4f}'.format(epoch, epoch_loss))
         epoch_losses.append(epoch_loss)
-
-    ## Evaluate model
-
-    model.eval()
-    # Convert a list of tuples to two lists
-    test_X, test_Y = map(list, zip(*testset))
-    test_bg = dgl.batch(test_X)
-    test_Y = torch.tensor(test_Y).float().view(-1, 1)
-    probs_Y = torch.softmax(model(test_bg), 1)
-    sampled_Y = torch.multinomial(probs_Y, 1)
-    argmax_Y = torch.max(probs_Y, 1)[1].view(-1, 1)
-    print('Accuracy of sampled predictions on the test set: {:.4f}%'.format(
-        (test_Y == sampled_Y.float()).sum().item() / len(test_Y) * 100))
-    print('Accuracy of argmax predictions on the test set: {:4f}%'.format(
-        (test_Y == argmax_Y.float()).sum().item() / len(test_Y) * 100))
-
+    evaluate()
 
 import argparse
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--bug_type", help="Type of bug to train", choices=["swapped_args", "incorrect_binary_operator", "incorrect_binary_operand"], required=True)
+    '--bug_type', help='Type of bug to train', choices=['swapped_args', 'incorrect_binary_operator', 'incorrect_binary_operand', 'all'], required=False)
 parser.add_argument(
-    "--use_deepbugs_embeddings", help="Random or deepbugs embeddings", required=False)
+    '--use_deepbugs_embeddings', help='Random or deepbugs embeddings', required=False)
 
 
-if __name__=="__main__": 
+if __name__=='__main__': 
     args = parser.parse_args()
-    bug_type = args.bug_type
-    use_deepbugs_embeddings = True if args.use_deepbugs_embeddings else False
-    main(bug_type, use_deepbugs_embeddings)
+    bug_type = args.bug_type or 'all'
+    use_deepbugs_embeddings = True if args.use_deepbugs_embeddings in ['True', 'true'] else False
+    main(bug_type, use_deepbugs_embeddings) 
 
 
 # With word2vec

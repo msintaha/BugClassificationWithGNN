@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from code_dataset_mini import CorrectAndBuggyDataset
+from GCN_dataset_mini import CorrectAndBuggyDataset
 from dgl.nn.pytorch import *
 from torch.utils.data import DataLoader
 
