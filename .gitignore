@@ -5,3 +5,6 @@ binOps_eval/*
 calls_training/*
 calls_eval/*
 token_to_vector/*
+data/*
+.ipynb_checkpoints/
+__pycache__/

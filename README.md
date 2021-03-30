@@ -6,5 +6,14 @@
 
 ## How to run
 
-- `python3 code_dataset_mini.py --bug_type=incorrect_binary_operator --use_deepbugs_embeddings=True` or `python3 code_dataset_large.py --bug_type=incorrect_binary_operator --use_deepbugs_embeddings=True` will create an instance of the dataset, simply import the dataset class and feed it to the module or paste the classifier code below the dataset creation for now (after line 339)
-- Replace `--bug_type` with either `incorrect_binary_operator`, `incorrect_binary_operand` or `swapped_args` to train the model to identify either of the bug types. To use random embeddings, just pass `False` to the arg `--use_deepbugs_embeddings` in the command. 
+There are 3 args that you need to set. The `--bug_type`, `--use_deepbugs_embeddings` and `--dataset_size` in order to run the classifiers. The arg choices are listed in the respective classifier files
+
+### GAT Classifier on Homogenous graphs
+`python3 gat_classifier.py --bug_type=binOps --use_deepbugs_embeddings=True --dataset_size=mini`
+
+### GCN Classifier on Homogenous graphs
+`python3 gcn_classifier.py --bug_type=binOps --use_deepbugs_embeddings=True --dataset_size=mini`
+
+### RGCN Classifier on Heterogenous graphs
+- For binary operator related bugs: `python3 rgcn_classifier_heterographs.py --bug_type=binOps --use_deepbugs_embeddings=True --dataset_size=mini`
+- For swapped args bug: `python3 rgcn_classifier_heterographs.py --bug_type=swapped_args --use_deepbugs_embeddings=True --dataset_size=mini`

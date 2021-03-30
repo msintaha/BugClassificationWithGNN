@@ -1,15 +1,7 @@
+from heterogenous_mini_dataset import MiniCorrectAndBuggyDataset
+from heterogenous_full_dataset import FullCorrectAndBuggyDataset
+
 import dgl
-import dgl.function as fn
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from homogenous_mini_dataset import MiniCorrectAndBuggyDataset
-from homogenous_full_dataset import FullCorrectAndBuggyDataset
-
-from dgl.nn.pytorch import *
-from torch.utils.data import DataLoader
-
 
 def collate(samples):
     # The input `samples` is a list of pairs
@@ -17,6 +9,22 @@ def collate(samples):
     graphs, labels = map(list, zip(*samples))
     batched_graph = dgl.batch(graphs)
     return batched_graph, torch.tensor(labels)
+
+import dgl.function as fn
+import dgl.nn.pytorch as dglnn
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+# Sends a message of node feature h.
+msg = fn.copy_src(src='features', out='m')
+
+def reduce(nodes):
+    """Take an average over all neighbor node features hu and use it to
+    overwrite the original node feature."""
+    accum = torch.mean(nodes.mailbox['m'], 1)
+    return {'features': accum}
 
 class GATLayer(nn.Module):
     def __init__(self,
@@ -36,7 +44,7 @@ class GATLayer(nn.Module):
         self.attn_r = nn.Parameter(torch.Tensor(size=(num_heads, out_dim, 1)))
         self.attn_drop = nn.Dropout(attn_drop)
         self.activation = nn.LeakyReLU(alpha)
-        self.softmax = edge_softmax
+        self.softmax = self.edge_softmax
 
         self.agg_activation=agg_activation
 
@@ -48,7 +56,7 @@ class GATLayer(nn.Module):
         for name in edata_names:
             self.g.edata.pop(name)
 
-    def forward(self, feat, bg):
+    def forward(self, bg, feat):
         # prepare, inputs are of shape V x F, V the number of nodes, F the dim of input features
         self.g = bg
         h = self.feat_drop(feat)
@@ -87,29 +95,47 @@ class GATLayer(nn.Module):
         # Dropout attention scores and save them
         self.g.edata['a_drop'] = self.attn_drop(attention)
 
-class GATClassifier(nn.Module):
-    def __init__(self, in_dim, hidden_dim, num_heads, n_classes):
-        super(GATClassifier, self).__init__()
+class RGCN(nn.Module):
+    def __init__(self, in_feats, hid_feats, out_feats, num_heads, rel_names):
+        super().__init__()
 
-        self.layers = nn.ModuleList([
-            GATLayer(in_dim, hidden_dim, num_heads),
-            GATLayer(hidden_dim * num_heads, hidden_dim, num_heads)
-        ])
-        self.classify = nn.Linear(hidden_dim * num_heads, n_classes)
+        self.conv1 = dglnn.HeteroGraphConv({
+            rel: GATLayer(in_feats, hid_feats, num_heads)
+            for rel in rel_names}, aggregate='sum')
+        self.conv2 = dglnn.HeteroGraphConv({
+            rel: GATLayer(hid_feats * num_heads, out_feats, num_heads)
+            for rel in rel_names}, aggregate='sum')
 
-    def forward(self, bg):
-        # For undirected graphs, in_degree is the same as
-        # out_degree.
-        h = bg.ndata['features']
-        for i, gnn in enumerate(self.layers):
-            h = gnn(h, bg)
-        bg.ndata['features'] = h
-        hg = dgl.mean_nodes(bg, 'features')
-        return self.classify(hg)
+    def forward(self, graph, inputs):
+        # inputs is features of nodes
+        h = self.conv1(graph, inputs)
+        h = {k: F.relu(v) for k, v in h.items()}
+        h = self.conv2(graph, h)
+        return h
 
+class HeteroClassifier(nn.Module):
+    def __init__(self, in_dim, hidden_dim, n_classes, num_heads, rel_names):
+        super().__init__()
+
+        self.rgcn = RGCN(in_dim, hidden_dim, hidden_dim, num_heads, rel_names)
+        self.classify = nn.Linear(hidden_dim, n_classes)
+
+    def forward(self, g):
+        h = g.ndata['features']
+        h = self.rgcn(g, h)
+        with g.local_scope():
+            g.ndata['features'] = h
+            # Calculate graph representation by average readout.
+            hg = 0
+            for ntype in g.ntypes:
+                hg = hg + dgl.mean_nodes(g, 'features', ntype=ntype)
+            return self.classify(hg)
+
+import torch.optim as optim
+from torch.utils.data import DataLoader
 
 def main(bug_type, use_deepbugs_embeddings, dataset_size):
-    print('----GAT Classifier Training bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
+    print('----GATConv Training on hetero graphs in bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
     # Create training and test sets.
     if dataset_size == 'mini':
         trainset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
@@ -118,8 +144,10 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
         trainset = FullCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
         testset = FullCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
 
+    # Use PyTorch's DataLoader and the collate function
+    # defined before.
     data_loader = DataLoader(trainset, batch_size=100, shuffle=True,
-                         collate_fn=collate)
+                            collate_fn=collate)
     
     def evaluate():
         ## Evaluate model
@@ -127,11 +155,8 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
         # Convert a list of tuples to two lists
         test_X, test_Y = map(list, zip(*testset))
         test_bg = dgl.batch(test_X)
-
         test_Y = torch.tensor(test_Y).float().view(-1, 1)
-        model_output = model(test_bg)
-        probs_Y = torch.softmax(model_output, 1)
-        # print('probs_Y', probs_Y)
+        probs_Y = torch.softmax(model(test_bg), 1)
         sampled_Y = torch.multinomial(probs_Y, 1)
         argmax_Y = torch.max(probs_Y, 1)[1].view(-1, 1)
         print('Accuracy of sampled predictions on the test set: {:.4f}%'.format(
@@ -139,15 +164,14 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
         print('Accuracy of argmax predictions on the test set: {:4f}%'.format(
             (test_Y == argmax_Y.float()).sum().item() / len(test_Y) * 100))
 
-
     # Create model
-    model = GATClassifier(200, 20, 10, trainset.num_classes)
+    model = HeteroClassifier(200, 16, trainset.num_classes, 8, ['precedes', 'precedes', 'precedes', 'follows', 'follows', 'precedes'])
     loss_func = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.005, weight_decay=5e-4)
+    optimizer = optim.Adam(model.parameters(), lr=0.005)
     model.train()
 
     epoch_losses = []
-    for epoch in range(20):
+    for epoch in range(30):
         epoch_loss = 0
         for iter, (bg, label) in enumerate(data_loader):
             prediction = model(bg)
@@ -158,16 +182,17 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
             epoch_loss += loss.detach().item()
         epoch_loss /= (iter + 1)
         print('Epoch {}, loss {:.4f}'.format(epoch, epoch_loss))
-        if epoch % 5 == 0:
-            evaluate()
         epoch_losses.append(epoch_loss)
+        if epoch % 5 == 0:
+          evaluate()
 
     evaluate()
 
 import argparse
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--bug_type', help='Type of bug to train', choices=['swapped_args', 'incorrect_binary_operator', 'incorrect_binary_operand', 'all'], required=False)
+    '--bug_type', help='Type of bug to train', choices=['swapped_args', 'binOps'], required=False)
 parser.add_argument(
     '--use_deepbugs_embeddings', help='Random or deepbugs embeddings', required=False)
 parser.add_argument(
