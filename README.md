@@ -1,6 +1,9 @@
 ## Installation instructions
 
 - Create a virtualenv using pyenv of python 3.7.1
+      - "pip install virtualenv"
+      - "virtualenv venv"
+      - "source venv/bin/activate"    
 - Run `pip3 install -r requirements.txt` to install packages inside the virtualenv
 - Unzip ALL the `tar.gz` files
 
