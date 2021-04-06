@@ -1,6 +1,4 @@
 import dgl
-from homogenous_mini_dataset import MiniCorrectAndBuggyDataset
-from homogenous_full_dataset import FullCorrectAndBuggyDataset
 
 
 def collate(samples):
@@ -79,9 +77,11 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
     print('----GCN Classifier Training bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
     # Create training and test sets.
     if dataset_size == 'mini':
+        from homogenous_mini_dataset import MiniCorrectAndBuggyDataset
         trainset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
         testset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
     elif dataset_size == 'full':
+        from homogenous_full_dataset import FullCorrectAndBuggyDataset
         trainset = FullCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
         testset = FullCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
 
