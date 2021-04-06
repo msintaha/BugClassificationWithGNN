@@ -23,17 +23,24 @@ with open('./type_to_vector.json', encoding='utf-8') as f:
 with open('./node_type_to_vector.json', encoding='utf-8') as f:
   node_type_vectors = json.load(f)
 
-with open(binOps_training_data_paths, encoding='utf-8') as f:
-  binOps_training = json.load(f)
-
-with open(calls_training_data_paths, encoding='utf-8') as f:
-  calls_training = json.load(f)
-
 with open(binOps_validation_data_paths, encoding='utf-8') as f:
   binOps_eval = json.load(f)
 
 with open(calls_validation_data_paths, encoding='utf-8') as f:
   calls_eval = json.load(f)
+
+with open(binOps_training_data_paths, encoding='utf-8') as f:
+  binOps_training = json.load(f) + binOps_eval[398000:]
+  binOps_eval = binOps_eval[0:398000]
+
+with open(calls_training_data_paths, encoding='utf-8') as f:
+  calls_training = json.load(f) + calls_eval[220000:]
+  calls_eval = calls_eval[0:220000]
+
+print('Len of calls_training', len(calls_training))
+print('Len of calls_eval', len(calls_eval))
+print('Len of binOps_training', len(binOps_training))
+print('Len of binOps_eval', len(binOps_eval))
 
 ### Create graph tuples of positive and negative examples from word2vec embeddings
 
@@ -73,6 +80,12 @@ LABELS = {
     'incorrect_binary_operator': 2,
     'correct_args': 3,
     'swapped_args': 4
+}
+
+num_classes_map = {
+  'all': len(LABELS),
+  'binOps': 3,
+  'swapped_args': 2
 }
 
 
@@ -372,4 +385,4 @@ class FullCorrectAndBuggyDataset(DGLDataset):
     @property
     def num_classes(self):
         """Number of classes."""
-        return 3 if self.bug_type == 'binOps' else 2
+        return num_classes_map[self.bug_type]

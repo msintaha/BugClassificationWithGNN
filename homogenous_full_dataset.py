@@ -23,17 +23,24 @@ with open('./type_to_vector.json', encoding='utf-8') as f:
 with open('./node_type_to_vector.json', encoding='utf-8') as f:
   node_type_vectors = json.load(f)
 
-with open(binOps_training_data_paths, encoding='utf-8') as f:
-  binOps_training = json.load(f)
-
-with open(calls_training_data_paths, encoding='utf-8') as f:
-  calls_training = json.load(f)
-
 with open(binOps_validation_data_paths, encoding='utf-8') as f:
   binOps_eval = json.load(f)
 
 with open(calls_validation_data_paths, encoding='utf-8') as f:
   calls_eval = json.load(f)
+
+with open(binOps_training_data_paths, encoding='utf-8') as f:
+  binOps_training = json.load(f) + binOps_eval[398000:]
+  binOps_eval = binOps_eval[0:398000]
+
+with open(calls_training_data_paths, encoding='utf-8') as f:
+  calls_training = json.load(f) + calls_eval[220000:]
+  calls_eval = calls_eval[0:220000]
+
+print('Len of calls_training_full', len(calls_training))
+print('Len of calls_eval_full', len(calls_eval))
+print('Len of binOps_training_full', len(binOps_training))
+print('Len of binOps_eval_full', len(binOps_eval))
 
 ### Create graph tuples of positive and negative examples from word2vec embeddings
 

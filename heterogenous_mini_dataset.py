@@ -75,6 +75,12 @@ LABELS = {
     'swapped_args': 4
 }
 
+num_classes_map = {
+  'all': len(LABELS),
+  'binOps': 3,
+  'swapped_args': 2
+}
+
 
 class MiniCorrectAndBuggyDataset(DGLDataset):
     def __init__(self, use_deepbugs_embeddings=True, is_training=True, bug_type='all'):
@@ -171,7 +177,7 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
             g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(operator_vector)
             ])
-            # hg = dgl.to_homogeneous(g, ndata=['features'])
+
             self.graphs.append(g)
             self.labels.append(LABELS['correct_binary_op'])
             
@@ -202,7 +208,7 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
             g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(other_operator_vector)
             ])
-            # hg = dgl.to_homogeneous(g, ndata=['features'])
+
             self.graphs.append(g)
             self.labels.append(LABELS['incorrect_binary_operator'])
 
@@ -255,7 +261,7 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
             g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(operator_vector)
             ])
-            # hg = dgl.to_homogeneous(g, ndata=['features'])
+
             self.graphs.append(g)
             self.labels.append(LABELS['incorrect_binary_operand'])
 
@@ -314,7 +320,7 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
               th.tensor(argument0_type_vector),
               th.tensor(argument1_type_vector),
             ])
-            # hg = dgl.to_homogeneous(g, ndata=['features'])
+
             self.graphs.append(g)
             self.labels.append(LABELS['correct_args'] if self.bug_type == 'all' else 0)
 
@@ -332,7 +338,7 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
               th.tensor(argument1_type_vector),
               th.tensor(argument0_type_vector),
             ])
-            # hg = dgl.to_homogeneous(g, ndata=['features'])
+
             self.graphs.append(g)
             self.labels.append(LABELS['swapped_args'] if self.bug_type == 'all' else 1)
     
@@ -372,4 +378,4 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
     @property
     def num_classes(self):
         """Number of classes."""
-        return 3 if self.bug_type == 'binOps' else 2
+        return num_classes_map[self.bug_type]
