@@ -1,9 +1,9 @@
 import json
 
-binOps_training_data_paths = './binOps_training/binOps_training_150.json'
-binOps_validation_data_paths = './binOps_eval/binOps_eval_150.json'
-calls_training_data_paths = './calls_training/calls_training_150.json'
-calls_validation_data_paths = './calls_eval/calls_eval_150.json'
+binOps_training_data_paths = './binOps_training/binOps_training.json'
+binOps_validation_data_paths = './binOps_eval/binOps_eval.json'
+calls_training_data_paths = './calls_training/calls_training.json'
+calls_validation_data_paths = './calls_eval/calls_eval.json'
 
 
 token_vectors = None
@@ -14,7 +14,7 @@ binOps_training = None
 binOps_eval = None
 calls_training = None
 
-with open('./token_to_vector/token_to_vector_150.json', encoding='utf-8') as f:
+with open('./token_to_vector/token_to_vector_all_tokens.json', encoding='utf-8') as f:
   token_vectors = json.load(f)
 
 with open('./type_to_vector.json', encoding='utf-8') as f:
@@ -23,19 +23,17 @@ with open('./type_to_vector.json', encoding='utf-8') as f:
 with open('./node_type_to_vector.json', encoding='utf-8') as f:
   node_type_vectors = json.load(f)
 
+with open(binOps_training_data_paths, encoding='utf-8') as f:
+  binOps_training = json.load(f)
+
+with open(calls_training_data_paths, encoding='utf-8') as f:
+  calls_training = json.load(f)
+
 with open(binOps_validation_data_paths, encoding='utf-8') as f:
   binOps_eval = json.load(f)
 
 with open(calls_validation_data_paths, encoding='utf-8') as f:
   calls_eval = json.load(f)
-
-with open(binOps_training_data_paths, encoding='utf-8') as f:
-  binOps_training = json.load(f) + binOps_eval[398000:]
-  binOps_eval = binOps_eval[0:398000]
-
-with open(calls_training_data_paths, encoding='utf-8') as f:
-  calls_training = json.load(f) + calls_eval[220000:]
-  calls_eval = calls_eval[0:220000]
 
 print('Len of calls_training_full', len(calls_training))
 print('Len of calls_eval_full', len(calls_eval))
@@ -71,7 +69,7 @@ LABELS = {
 }
 
 
-class FullCorrectAndBuggyDataset(DGLDataset):
+class MiniCorrectAndBuggyDataset(DGLDataset):
     def __init__(self, use_deepbugs_embeddings=True, is_training=True, bug_type='all'):
         self.file_to_operands = dict()
         self.all_operators = None
@@ -166,7 +164,7 @@ class FullCorrectAndBuggyDataset(DGLDataset):
             
             g = dgl.graph(binOps_graph, num_nodes=len(correct_vector))
             g.ndata['features'] = self.get_tensor_feature(correct_vector)
-            g.ndata['nodeLabels'] = self.get_tensor_feature(correct_bin_ops_nodeLabels)
+            g.ndata['nodeLabels'] = th.stack(correct_bin_ops_nodeLabels)
             self.graphs.append(g)
             self.labels.append(LABELS['correct_binary_op'] if self.bug_type == 'all' else 0)
             
@@ -204,7 +202,7 @@ class FullCorrectAndBuggyDataset(DGLDataset):
 
                 g = dgl.graph(binOps_graph, num_nodes=num_nodes)
                 g.ndata['features'] = self.get_tensor_feature(incorrect_bin_ops_vector)
-                g.ndata['nodeLabels'] = self.get_tensor_feature(incorrect_bin_operator_nodeLabels)
+                g.ndata['nodeLabels'] = th.stack(incorrect_bin_operator_nodeLabels)
                 self.graphs.append(g)
                 self.labels.append(LABELS['incorrect_binary_operator'] if self.bug_type == 'all' else 1)
 
@@ -272,7 +270,7 @@ class FullCorrectAndBuggyDataset(DGLDataset):
 
                 g = dgl.graph(binOps_graph, num_nodes=num_nodes)
                 g.ndata['features'] = self.get_tensor_feature(incorrect_bin_operands_vector)
-                g.ndata['nodeLabels'] = self.get_tensor_feature(incorrect_bin_operands_nodeLabels)
+                g.ndata['nodeLabels'] = th.stack(incorrect_bin_operands_nodeLabels)
                 self.graphs.append(g)
                 self.labels.append(LABELS['incorrect_binary_operand'] if self.bug_type == 'all' else 1)
 
@@ -327,9 +325,21 @@ class FullCorrectAndBuggyDataset(DGLDataset):
                 th.tensor(argument1_type_vector),
                 th.tensor(argument1_vector),
             ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
+
+            correct_nodeLabels = [
+                th.tensor(0),
+                th.tensor(0),
+                th.tensor(0),
+                th.tensor(0),
+                th.tensor(0),
+                th.tensor(0),
+                th.tensor(0),
+                th.tensor(0),
+            ]
             
             g = dgl.graph(calls_graph, num_nodes=len(correct_vector))
             g.ndata['features'] = self.get_tensor_feature(correct_vector)
+            g.ndata['nodeLabels'] = th.stack(correct_nodeLabels)
             self.graphs.append(g)
             self.labels.append(LABELS['correct_args'] if self.bug_type == 'all' else 0)
             
@@ -345,8 +355,20 @@ class FullCorrectAndBuggyDataset(DGLDataset):
                 th.tensor(argument0_vector),
             ] if self.use_deepbugs_embeddings else self.generate_random_embedding(num_nodes)
 
+            swapped_args_nodeLabels = [
+                th.tensor(0),
+                th.tensor(0),
+                th.tensor(0),
+                th.tensor(1),
+                th.tensor(1),
+                th.tensor(0),
+                th.tensor(1),
+                th.tensor(1),
+            ]
+
             g = dgl.graph(swapped_calls_graph, num_nodes=len(swapped_args_vector))
             g.ndata['features'] = self.get_tensor_feature(swapped_args_vector)
+            g.ndata['nodeLabels'] = th.stack(swapped_args_nodeLabels)
             self.graphs.append(g)
             self.labels.append(LABELS['swapped_args'] if self.bug_type == 'all' else 1)
     

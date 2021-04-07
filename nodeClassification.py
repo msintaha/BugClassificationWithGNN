@@ -3,6 +3,13 @@
 import dgl.nn as dglnn
 import torch.nn as nn
 import torch.nn.functional as F
+def collate(samples):
+    # The input `samples` is a list of pairs
+    #  (graph, label).
+    graphs, labels = map(list, zip(*samples))
+    batched_graph = dgl.batch(graphs)
+    return batched_graph, torch.tensor(labels)
+
 class SAGE(nn.Module):
     def __init__(self, in_feats, hid_feats, out_feats):
         super().__init__()
@@ -18,27 +25,34 @@ class SAGE(nn.Module):
         h = self.conv2(graph, h)
         return h
 
-
+import dgl
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
 def main(bug_type, use_deepbugs_embeddings, dataset_size):
-    print('----GATConv Training on hetero graphs in bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
+    print('----Node Classification Training on Mono graphs in bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
     # Create training and test sets.
-    if dataset_size == 'mini':
-        from heterogenous_mini_dataset import MiniCorrectAndBuggyDataset
-        trainset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
-        testset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
-    elif dataset_size == 'full':
-        from heterogenous_full_dataset import FullCorrectAndBuggyDataset
-        trainset = FullCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
-        testset = FullCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
+    
+    from labeledNodes_mini_dataset import MiniCorrectAndBuggyDataset
+    trainset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
+    testset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
+
+
+    print (trainset[0])
 
     # Use PyTorch's DataLoader and the collate function
     # defined before.
     data_loader = DataLoader(trainset, batch_size=100, shuffle=True,
                             collate_fn=collate)
     
+    # node_features = graph.ndata['features']
+    # node_labels = graph.ndata['nodeLabels']
+    # train_mask = graph.ndata['train_mask']
+    # valid_mask = graph.ndata['val_mask']
+    # test_mask = graph.ndata['test_mask']
+    n_features = 200
+    n_labels = 2
+
     def evaluate():
         ## Evaluate model
         model.eval()
@@ -55,13 +69,7 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
             (test_Y == argmax_Y.float()).sum().item() / len(test_Y) * 100))
 
     # Create model
-    # model = HeteroClassifier(200, 16, trainset.num_classes, 8, ['precedes', 'precedes', 'precedes', 'follows', 'follows', 'precedes'])
-    model = HAN(meta_paths=[['follows', 'precedes']],
-                in_size=200,
-                hidden_size=16,
-                out_size=trainset.num_classes,
-                num_heads=8,
-                dropout=0.6)
+    model = SAGE(in_feats=n_features, hid_feats=100, out_feats=n_labels)
     loss_func = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.005)
     model.train()
