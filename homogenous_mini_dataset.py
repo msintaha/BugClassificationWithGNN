@@ -47,8 +47,8 @@ from dgl.data.utils import save_graphs, load_graphs
 from collections import namedtuple
 
 
-binOps_graph = ([0, 1, 1, 1, 3, 4, 2, 5], [1, 2, 3, 5, 4, 2, 6, 6])
-incorrect_bin_operand_graph = ([0, 1, 1, 1, 3, 4, 2, 5, 0, 7], [1, 2, 3, 5, 4, 2, 6, 6, 7, 8])
+binOps_graph = ([0,  1,1,1, 3,3, 4,2, 5],
+                [1,  2,3,5, 4,5, 2,6, 6])
 calls_graph = ([0, 1, 1, 2, 2, 3, 5, 6, 4], [1, 2, 5, 5, 3, 4, 6, 7, 7])
 swapped_calls_graph = ([0, 1, 1, 2, 3, 5, 6, 5, 7], [1, 2, 5, 3, 4, 6, 7, 2, 4])
 operator_embedding_size = 30
