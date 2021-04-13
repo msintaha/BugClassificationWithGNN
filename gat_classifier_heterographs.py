@@ -141,10 +141,9 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
             (test_Y == argmax_Y.float()).sum().item() / len(test_Y) * 100))
 
     # Create model
-    # model = HeteroClassifier(200, 16, trainset.num_classes, 8, ['precedes', 'precedes', 'precedes', 'follows', 'follows', 'precedes'])
     model = HAN(meta_paths=[['follows', 'followed_by']],
                 in_size=200,
-                hidden_size=10,
+                hidden_size=20,
                 out_size=trainset.num_classes,
                 num_heads=10,
                 dropout=0.6)
