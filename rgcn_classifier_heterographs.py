@@ -1,5 +1,6 @@
 import dgl
 
+
 def collate(samples):
     # The input `samples` is a list of pairs
     #  (graph, label).
@@ -80,7 +81,7 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
     # defined before.
     data_loader = DataLoader(trainset, batch_size=100, shuffle=True,
                             collate_fn=collate)
-    
+ 
     def evaluate():
         ## Evaluate model
         model.eval()
@@ -88,7 +89,8 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
         test_X, test_Y = map(list, zip(*testset))
         test_bg = dgl.batch(test_X)
         test_Y = torch.tensor(test_Y).float().view(-1, 1)
-        probs_Y = torch.softmax(model(test_bg), 1)
+        prediction = model(test_bg)
+        probs_Y = torch.softmax(prediction, 1)
         sampled_Y = torch.multinomial(probs_Y, 1)
         argmax_Y = torch.max(probs_Y, 1)[1].view(-1, 1)
         print('Accuracy of sampled predictions on the test set: {:.4f}%'.format(
@@ -125,7 +127,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--bug_type', help='Type of bug to train', choices=['swapped_args', 'binOps'], required=False)
+    '--bug_type', help='Type of bug to train', choices=['swapped_args', 'binOps', 'incorrect_binary_operator', 'incorrect_binary_operand'], required=False)
 parser.add_argument(
     '--use_deepbugs_embeddings', help='Random or deepbugs embeddings', required=False)
 parser.add_argument(

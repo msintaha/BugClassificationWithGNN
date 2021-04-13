@@ -78,7 +78,9 @@ LABELS = {
 num_classes_map = {
   'all': len(LABELS),
   'binOps': 3,
-  'swapped_args': 2
+  'swapped_args': 2,
+  'incorrect_binary_operand': 2,
+  'incorrect_binary_operator': 2,
 }
 
 
@@ -182,88 +184,90 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
             self.labels.append(LABELS['correct_binary_op'])
             
             ## Incorrect binary operator
-            other_operator = None
-            other_operator_vector = None
+            if self.bug_type == 'incorrect_binary_operator' or self.bug_type == 'binOps':
+              other_operator = None
+              other_operator_vector = None
 
-            while other_operator_vector == None:
-                other_operator = random.choice(self.all_operators)
-                if other_operator != operator:
-                    other_operator_vector = [0] * operator_embedding_size
-                    other_operator_vector[self.all_operators.index(
-                        other_operator)] = 1
+              while other_operator_vector == None:
+                  other_operator = random.choice(self.all_operators)
+                  if other_operator != operator:
+                      other_operator_vector = [0] * operator_embedding_size
+                      other_operator_vector[self.all_operators.index(
+                          other_operator)] = 1
 
-            g = dgl.heterograph(binOps_graph)
-            g.nodes['nodeType'].data['features'] = self.get_padded_node_features_by_max([
-              th.tensor(node_type_vectors[grand_parent]),
-              th.tensor(node_type_vectors[parent]),
-            ])
-            g.nodes['type'].data['features'] = self.get_padded_node_features_by_max([
-              th.tensor(type_vectors[left_type]),
-              th.tensor(type_vectors[right_type]),
-            ])
-            g.nodes['token'].data['features'] = self.get_padded_node_features_by_max([
-              th.tensor(token_vectors[left]),
-              th.tensor(token_vectors[right])
-            ])
-            g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
-              th.tensor(other_operator_vector)
-            ])
-
-            self.graphs.append(g)
-            self.labels.append(LABELS['incorrect_binary_operator'])
-
-            ## Wrong binary operand
-            replace_left = random.random() < 0.5
-            if replace_left:
-                to_replace_operand = left
-            else:
-                to_replace_operand = right
-            file = src.split(' : ')[0]
-            all_operands = self.file_to_operands[file]
-            tries_left = 100
-            found = False
-            while (not found) and tries_left > 0:
-                other_operand = random.choice(list(all_operands))
-                if other_operand.op in token_vectors and other_operand.op != to_replace_operand:
-                    found = True
-                tries_left -= 1
-
-            if not found:
-                return
-
-            other_operand_vector = token_vectors[other_operand.op]
-            other_operand_type_vector = type_vectors[other_operand.type]
-
-            g = dgl.heterograph(binOps_graph)
-            g.nodes['nodeType'].data['features'] = self.get_padded_node_features_by_max([
-              th.tensor(node_type_vectors[grand_parent]),
-              th.tensor(node_type_vectors[parent]),
-            ])
-            if replace_left:
+              g = dgl.heterograph(binOps_graph)
+              g.nodes['nodeType'].data['features'] = self.get_padded_node_features_by_max([
+                th.tensor(node_type_vectors[grand_parent]),
+                th.tensor(node_type_vectors[parent]),
+              ])
               g.nodes['type'].data['features'] = self.get_padded_node_features_by_max([
-                th.tensor(other_operand_type_vector),
+                th.tensor(type_vectors[left_type]),
                 th.tensor(type_vectors[right_type]),
               ])
               g.nodes['token'].data['features'] = self.get_padded_node_features_by_max([
-                th.tensor(other_operand_vector),
+                th.tensor(token_vectors[left]),
                 th.tensor(token_vectors[right])
               ])
-            else:
-              g.nodes['type'].data['features'] = self.get_padded_node_features_by_max([
-                th.tensor(type_vectors[left_type]),
-                th.tensor(other_operand_type_vector),
-              ])
-              g.nodes['token'].data['features'] = self.get_padded_node_features_by_max([
-                th.tensor(token_vectors[left]),
-                th.tensor(other_operand_vector)
+              g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
+                th.tensor(other_operator_vector)
               ])
 
-            g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
-              th.tensor(operator_vector)
-            ])
+              self.graphs.append(g)
+              self.labels.append(LABELS['incorrect_binary_operator'] if self.bug_type == 'binOps' else 1)
 
-            self.graphs.append(g)
-            self.labels.append(LABELS['incorrect_binary_operand'])
+            ## Wrong binary operand
+            if self.bug_type == 'incorrect_binary_operand' or self.bug_type == 'binOps':
+              replace_left = random.random() < 0.5
+              if replace_left:
+                  to_replace_operand = left
+              else:
+                  to_replace_operand = right
+              file = src.split(' : ')[0]
+              all_operands = self.file_to_operands[file]
+              tries_left = 100
+              found = False
+              while (not found) and tries_left > 0:
+                  other_operand = random.choice(list(all_operands))
+                  if other_operand.op in token_vectors and other_operand.op != to_replace_operand:
+                      found = True
+                  tries_left -= 1
+
+              if not found:
+                  return
+
+              other_operand_vector = token_vectors[other_operand.op]
+              other_operand_type_vector = type_vectors[other_operand.type]
+
+              g = dgl.heterograph(binOps_graph)
+              g.nodes['nodeType'].data['features'] = self.get_padded_node_features_by_max([
+                th.tensor(node_type_vectors[grand_parent]),
+                th.tensor(node_type_vectors[parent]),
+              ])
+              if replace_left:
+                g.nodes['type'].data['features'] = self.get_padded_node_features_by_max([
+                  th.tensor(other_operand_type_vector),
+                  th.tensor(type_vectors[right_type]),
+                ])
+                g.nodes['token'].data['features'] = self.get_padded_node_features_by_max([
+                  th.tensor(other_operand_vector),
+                  th.tensor(token_vectors[right])
+                ])
+              else:
+                g.nodes['type'].data['features'] = self.get_padded_node_features_by_max([
+                  th.tensor(type_vectors[left_type]),
+                  th.tensor(other_operand_type_vector),
+                ])
+                g.nodes['token'].data['features'] = self.get_padded_node_features_by_max([
+                  th.tensor(token_vectors[left]),
+                  th.tensor(other_operand_vector)
+                ])
+
+              g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
+                th.tensor(operator_vector)
+              ])
+
+              self.graphs.append(g)
+              self.labels.append(LABELS['incorrect_binary_operand'] if self.bug_type == 'binOps' else 1)
 
 
     def generate_graphs_from_calls_ast(self):
@@ -358,11 +362,11 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
             self.labels = label_dict['labels']
         else:
             print('----Saving {} graph data----'.format(self.dataset_type))
-            if self.bug_type == 'binOps':
-                self.pre_scan_binOps(binOps_training, binOps_eval)
-                self.generate_graphs_from_binOps_ast()
-            elif self.bug_type == 'swapped_args':
-                self.generate_graphs_from_calls_ast()
+            if self.bug_type == 'swapped_args':
+              self.generate_graphs_from_calls_ast()
+            else:
+              self.pre_scan_binOps(binOps_training, binOps_eval)
+              self.generate_graphs_from_binOps_ast()
 
             self.labels = th.LongTensor(self.labels)
             save_graphs(filepath, self.graphs, {'labels': self.labels})
