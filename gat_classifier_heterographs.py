@@ -61,7 +61,7 @@ class HANLayer(nn.Module):
             self.gat_layers.append(GATConv(in_size, out_size, layer_num_heads,
                                            dropout, dropout, activation=F.elu,
                                            allow_zero_in_degree=True))
-        self.semantic_attention = SemanticAttention(in_size=out_size * layer_num_heads)
+        self.semantic_attention = SemanticAttention(in_size=out_size * layer_num_heads, hidden_size=out_size)
         self.meta_paths = list(tuple(meta_path) for meta_path in meta_paths)
 
         self._cached_graph = None
@@ -74,12 +74,14 @@ class HANLayer(nn.Module):
             self._cached_graph = g
             self._cached_coalesced_graph.clear()
             for meta_path in self.meta_paths:
-                self._cached_coalesced_graph[meta_path] = dgl.metapath_reachable_graph(
-                        g, meta_path)
+                self._cached_coalesced_graph[meta_path] = dgl.metapath_reachable_graph(g, meta_path)
 
         for i, meta_path in enumerate(self.meta_paths):
             new_g = self._cached_coalesced_graph[meta_path]
-            semantic_embeddings.append(self.gat_layers[i](new_g, h).flatten(1))
+            feat = h[new_g.ntypes[0]] if type(h) is dict else h
+            embedding = self.gat_layers[i](new_g, feat).flatten(1)
+
+            semantic_embeddings.append(embedding)
         semantic_embeddings = torch.stack(semantic_embeddings, dim=1)                  # (N, M, D * K)
 
         return self.semantic_attention(semantic_embeddings)                            # (N, D * K)
@@ -100,7 +102,8 @@ class HAN(nn.Module):
         for gnn in self.layers:
             h = gnn(g, h)
 
-        return self.predict(h)
+        classify = self.predict(h)
+        return classify
 
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -109,7 +112,7 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
     print('----GATConv Training on hetero graphs in bug type {} with {}----'.format(bug_type, 'deepbugs embeddings' if use_deepbugs_embeddings else 'random embeddings'))
     # Create training and test sets.
     if dataset_size == 'mini':
-        from heterogenous_mini_dataset import MiniCorrectAndBuggyDataset
+        from heterogenous_mini_dataset_gat import MiniCorrectAndBuggyDataset
         trainset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=True, bug_type=bug_type)
         testset = MiniCorrectAndBuggyDataset(use_deepbugs_embeddings=use_deepbugs_embeddings, is_training=False, bug_type=bug_type)
     elif dataset_size == 'full':
@@ -139,21 +142,23 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
 
     # Create model
     # model = HeteroClassifier(200, 16, trainset.num_classes, 8, ['precedes', 'precedes', 'precedes', 'follows', 'follows', 'precedes'])
-    model = HAN(meta_paths=[['follows', 'precedes']],
+    model = HAN(meta_paths=[['follows', 'followed_by']],
                 in_size=200,
-                hidden_size=16,
+                hidden_size=10,
                 out_size=trainset.num_classes,
-                num_heads=8,
+                num_heads=10,
                 dropout=0.6)
     loss_func = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.005)
     model.train()
 
+    print(data_loader)
     epoch_losses = []
     for epoch in range(30):
         epoch_loss = 0
         for iter, (bg, label) in enumerate(data_loader):
             prediction = model(bg)
+            print('label', len(label))
             loss = loss_func(prediction, label)
             optimizer.zero_grad()
             loss.backward()
