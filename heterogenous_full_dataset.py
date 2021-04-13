@@ -53,22 +53,22 @@ from dgl.data import DGLDataset
 from dgl.data.utils import save_graphs, load_graphs
 from collections import namedtuple
 
-binOps_graph = {('nodeType', 'precedes', 'nodeType') : [(0, 1)],
-     ('nodeType', 'precedes', 'type') : [(0, 0), (0, 1)],
-     ('nodeType', 'precedes', 'operator') : [(0, 0)],
-     ('type', 'precedes', 'token') : [(0, 0), (1, 1)],
-     ('token', 'follows', 'operator') : [(0, 0)],
-     ('operator', 'follows', 'token') : [(0, 0)]}
+binOps_graph = {('nodeType', 'precedes', 'nodeType') : ([0], [1]),
+     ('nodeType', 'precedes', 'type') : ([0, 0], [0, 1]),
+     ('nodeType', 'precedes', 'operator') : ([0], [0]),
+     ('type', 'precedes', 'token') : ([0, 1], [0, 1]),
+     ('token', 'follows', 'operator') : ([0], [0]),
+     ('operator', 'follows', 'token') : ([0], [0])}
 
-correct_calls_graph = {('token', 'precedes', 'token') : [(0, 1), (1, 2), (1, 3)],
-     ('token', 'precedes', 'type') : [(2, 0), (3, 1)],
-     ('type', 'precedes', 'token') : [(0, 4), (1, 5)],
-     ('token', 'follows', 'token') : [(2, 3), (4, 5)]}
+correct_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
+     ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
+     ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
+     ('token', 'follows', 'token') : ([2, 4], [3, 5])}
 
-swapped_calls_graph = {('token', 'precedes', 'token') : [(0, 1), (1, 2), (1, 3)],
-     ('token', 'precedes', 'type') : [(2, 0), (3, 1)],
-     ('type', 'precedes', 'token') : [(0, 4), (1, 5)],
-     ('token', 'follows', 'token') : [(3, 2), (5, 4)]}
+swapped_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
+     ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
+     ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
+     ('token', 'follows', 'token') : ([3, 5], [2, 4])}
 
 operator_embedding_size = 30
 name_embedding_size = 200
