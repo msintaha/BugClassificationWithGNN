@@ -56,15 +56,22 @@ binOps_graph = {('nodeType', 'precedes', 'nodeType') : ([0], [1]),
                ('token', 'follows', 'operator') : ([0], [0]),
                ('token', 'followed_by', 'operator') : ([1], [0])}
 
-correct_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
-     ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
-     ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
-     ('token', 'follows', 'token') : ([2, 4], [3, 5])}
+# correct_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
+#      ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
+#      ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
+#      ('token', 'follows', 'token') : ([2, 4], [3, 5])}
 
-swapped_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
-     ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
-     ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
-     ('token', 'follows', 'token') : ([3, 5], [2, 4])}
+# swapped_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
+#      ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
+#      ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
+#      ('token', 'follows', 'token') : ([3, 5], [2, 4])}
+correct_calls_graph = {('token', 'is_base_of', 'token') : ([0], [1]),
+     ('token', 'is_left_param_of', 'token') : ([1], [2]),
+     ('token', 'is_right_param_of', 'token') : ([1], [3]),
+     ('token', 'has_value_of', 'token') : ([2, 3], [4, 5]),
+     ('token', 'has_value_type', 'type') : ([2, 3], [0, 1]),
+     ('type', 'is_type_of', 'token') : ([0, 1], [4, 5]),
+     ('token', 'follows', 'token') : ([4], [5])}
 
 operator_embedding_size = 30
 name_embedding_size = 200
@@ -332,12 +339,12 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
             self.labels.append(LABELS['correct_args'] if self.bug_type == 'all' else 0)
 
             ## Swapped args
-            g = dgl.heterograph(swapped_calls_graph)
+            g = dgl.heterograph(correct_calls_graph)
             g.nodes['token'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(base_vector),
               th.tensor(callee_vector),
-              th.tensor(parameter1_vector),
               th.tensor(parameter0_vector),
+              th.tensor(parameter1_vector),
               th.tensor(argument1_vector),
               th.tensor(argument0_vector),
             ])
