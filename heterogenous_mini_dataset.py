@@ -47,11 +47,14 @@ from dgl.data.utils import save_graphs, load_graphs
 from collections import namedtuple
 
 binOps_graph = {('nodeType', 'precedes', 'nodeType') : ([0], [1]),
-     ('nodeType', 'precedes', 'type') : ([0, 0], [0, 1]),
-     ('nodeType', 'precedes', 'operator') : ([0], [0]),
-     ('type', 'precedes', 'token') : ([0, 1], [0, 1]),
-     ('token', 'follows', 'operator') : ([0], [0]),
-     ('operator', 'follows', 'token') : ([0], [0])}
+               ('nodeType', 'parent', 'token') : ([0, 0, 1, 1], [0, 1, 0, 1]),
+               ('nodeType', 'parent', 'operator') : ([0,1], [0,0]),
+ 
+               ('type', 'typeOf', 'token') : ([0, 1], [0, 1]),
+             ('nodeType', 'precedes', 'type') : ([0,0,1,1], [0,1,0,1]),
+ 
+               ('token', 'follows', 'operator') : ([0], [0]),
+               ('token', 'followed_by', 'operator') : ([1], [0])}
 
 correct_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
      ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
@@ -211,7 +214,7 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
               g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
                 th.tensor(other_operator_vector)
               ])
-
+              #print(g.etypes)
               self.graphs.append(g)
               self.labels.append(LABELS['incorrect_binary_operator'] if self.bug_type == 'binOps' else 1)
 
