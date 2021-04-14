@@ -100,13 +100,13 @@ def main(bug_type, use_deepbugs_embeddings, dataset_size):
 
     # Create model
     model = HeteroClassifier(200, 16, trainset.num_classes, \
-      ['isArgOf', 'isBaseOf', 'isLeftParamOf', 'isRightParamOf', 'isTypeOf'] if bug_type == 'swapped_args' else ['parent', 'parent', 'precedes', 'precedes', 'followed_by', 'follows', 'leftTypeOf', 'rightTypeOf', 'typeOf'])
+      ['follows', 'precedes', 'precedes', 'precedes'] if bug_type == 'swapped_args' else ['parent', 'parent', 'precedes', 'precedes', 'followed_by', 'follows','binOpTypes','typeOf'])
     loss_func = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.005)
     model.train()
 
     epoch_losses = []
-    for epoch in range(50):
+    for epoch in range(30):
         epoch_loss = 0
         for iter, (bg, label) in enumerate(data_loader):
             prediction = model(bg)
@@ -140,3 +140,4 @@ if __name__=='__main__':
     use_deepbugs_embeddings = True if args.use_deepbugs_embeddings in ['True', 'true'] else False
     dataset_size = args.dataset_size or 'mini'
     main(bug_type, use_deepbugs_embeddings, dataset_size) 
+
