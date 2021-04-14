@@ -47,24 +47,51 @@ from dgl.data.utils import save_graphs, load_graphs
 from collections import namedtuple
 
 binOps_graph = {('nodeType', 'precedes', 'nodeType') : ([0], [1]),
-               ('nodeType', 'parent', 'token') : ([0, 0, 1, 1], [0, 1, 0, 1]),
-               ('nodeType', 'parent', 'operator') : ([0,1], [0,0]),
+               ('nodeType', 'parent', 'token') : ([1, 1], [0, 1]),
+               ('nodeType', 'parent', 'operator') : ([1], [0]),
  
                ('type', 'typeOf', 'token') : ([0, 1], [0, 1]),
-             ('nodeType', 'precedes', 'type') : ([0,0,1,1], [0,1,0,1]),
+             ('nodeType', 'precedes', 'type') : ([1,1], [0,1]),
+
+              ('type', 'leftTypeOf', 'operator') : ([0], [0]),
+              ('type', 'rightTypeOf', 'operator') : ([1], [0]),
  
                ('token', 'follows', 'operator') : ([0], [0]),
                ('token', 'followed_by', 'operator') : ([1], [0])}
 
-correct_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
-     ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
-     ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
-     ('token', 'follows', 'token') : ([2, 4], [3, 5])}
+# correct_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
+#      ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
+#      ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
+#      ('token', 'follows', 'token') : ([2, 4], [3, 5])}
 
-swapped_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
-     ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
-     ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
-     ('token', 'follows', 'token') : ([3, 5], [2, 4])}
+correct_calls_graph = {
+     ('callee', 'isBaseOf', 'callee') : ([0], [1]),
+
+     ('param', 'isLeftParamOf', 'callee') : ([0], [1]),
+     ('param', 'isRightParamOf', 'callee') : ([1], [1]),
+
+     ('paramType', 'isTypeOf', 'param') : ([0], [0]),
+     ('paramType', 'isTypeOf', 'param') : ([1], [1]),
+
+     ('argument', 'isArgOf', 'param') : ([0], [0]),
+     ('argument', 'isArgOf', 'param') : ([1], [1])}  
+
+# swapped_calls_graph = {
+#      ('callee', 'isBaseOf', 'callee') : ([0], [1]),
+
+#      ('param', 'isLeftParamOf', 'callee') : ([0], [1]),
+#      ('param', 'isRightParamOf', 'callee') : ([1], [1]),
+
+#      ('paramType', 'isTypeOf', 'param') : ([0], [0]),
+#      ('paramType', 'isTypeOf', 'param') : ([1], [1]),
+
+#      ('argument', 'isArgOf', 'param') : ([1], [0]),
+#      ('argument', 'isArgOf', 'param') : ([0], [1])}    
+
+# swapped_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
+#      ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
+#      ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
+#      ('token', 'follows', 'token') : ([3, 5], [2, 4])}
 
 operator_embedding_size = 30
 name_embedding_size = 200
@@ -182,7 +209,7 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
             g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(operator_vector)
             ])
-
+            #print(g.etypes)
             self.graphs.append(g)
             self.labels.append(LABELS['correct_binary_op'])
             
@@ -214,7 +241,6 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
               g.nodes['operator'].data['features'] = self.get_padded_node_features_by_max([
                 th.tensor(other_operator_vector)
               ])
-              #print(g.etypes)
               self.graphs.append(g)
               self.labels.append(LABELS['incorrect_binary_operator'] if self.bug_type == 'binOps' else 1)
 
@@ -315,35 +341,43 @@ class MiniCorrectAndBuggyDataset(DGLDataset):
             
 
             g = dgl.heterograph(correct_calls_graph)
-            g.nodes['token'].data['features'] = self.get_padded_node_features_by_max([
+            g.nodes['callee'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(base_vector),
-              th.tensor(callee_vector),
+              th.tensor(callee_vector)
+            ])
+            g.nodes['param'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(parameter0_vector),
-              th.tensor(parameter1_vector),
-              th.tensor(argument0_vector),
-              th.tensor(argument1_vector),
+              th.tensor(parameter1_vector)
             ])
-            g.nodes['type'].data['features'] = self.get_padded_node_features_by_max([
+            g.nodes['paramType'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(argument0_type_vector),
-              th.tensor(argument1_type_vector),
+              th.tensor(argument1_type_vector)
             ])
-
+            g.nodes['argument'].data['features'] = self.get_padded_node_features_by_max([
+              th.tensor(argument0_vector),
+              th.tensor(argument1_vector)
+            ])
+            #print(g.etypes)
             self.graphs.append(g)
             self.labels.append(LABELS['correct_args'] if self.bug_type == 'all' else 0)
 
             ## Swapped args
-            g = dgl.heterograph(swapped_calls_graph)
-            g.nodes['token'].data['features'] = self.get_padded_node_features_by_max([
+            g = dgl.heterograph(correct_calls_graph)
+            g.nodes['callee'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(base_vector),
-              th.tensor(callee_vector),
-              th.tensor(parameter1_vector),
-              th.tensor(parameter0_vector),
-              th.tensor(argument1_vector),
-              th.tensor(argument0_vector),
+              th.tensor(callee_vector)
             ])
-            g.nodes['type'].data['features'] = self.get_padded_node_features_by_max([
-              th.tensor(argument1_type_vector),
+            g.nodes['param'].data['features'] = self.get_padded_node_features_by_max([
+              th.tensor(parameter0_vector),
+              th.tensor(parameter1_vector)
+            ])
+            g.nodes['paramType'].data['features'] = self.get_padded_node_features_by_max([
               th.tensor(argument0_type_vector),
+              th.tensor(argument1_type_vector)
+            ])
+            g.nodes['argument'].data['features'] = self.get_padded_node_features_by_max([
+              th.tensor(argument1_vector),
+              th.tensor(argument0_vector)
             ])
 
             self.graphs.append(g)
