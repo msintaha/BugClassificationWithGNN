@@ -62,7 +62,7 @@ binOps_graph = {
  
                ('type', 'typeOf', 'token') : ([0, 1], [0, 1]),
                ('token', 'follows', 'operator') : ([1], [0]),
-               ('token', 'followed_by', 'operator') : ([0], [0])}
+               ('token', 'followedBy', 'operator') : ([0], [0])}
 
 correct_calls_graph = {('token', 'precedes', 'token') : ([0], [1]),
      ('token', 'is_left_param_of', 'token') : ([1], [2]),

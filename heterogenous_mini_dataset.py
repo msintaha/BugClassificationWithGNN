@@ -46,27 +46,15 @@ from dgl.data import DGLDataset
 from dgl.data.utils import save_graphs, load_graphs
 from collections import namedtuple
 
-binOps_graph = {
-               ('nodeType', 'precedes', 'nodeType') : ([0], [1]),
+binOps_graph = {('nodeType', 'precedes', 'nodeType') : ([0], [1]),
                ('nodeType', 'parent', 'token') : ([1, 1], [0, 1]),          
                ('nodeType', 'parent', 'operator') : ([1,1], [0,0]),
-
                ('operator', 'parent', 'type') : ([0,0], [0,1]),
- 
                ('type', 'typeOf', 'token') : ([0, 1], [0, 1]),
                ('token', 'follows', 'operator') : ([1], [0]),
-               ('token', 'followed_by', 'operator') : ([0], [0])}
+               ('token', 'followedBy', 'operator') : ([0], [0])}
 
-# correct_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
-#      ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
-#      ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
-#      ('token', 'follows', 'token') : ([2, 4], [3, 5])}
-
-# swapped_calls_graph = {('token', 'precedes', 'token') : ([0, 1, 1], [1, 2, 3]),
-#      ('token', 'precedes', 'type') : ([2, 3], [0, 1]),
-#      ('type', 'precedes', 'token') : ([0, 1], [4, 5]),
-#      ('token', 'follows', 'token') : ([3, 5], [2, 4])}
-correct_calls_graph = {('token', 'is_base_of', 'token') : ([0], [1]),
+correct_calls_graph = {('token', 'precedes', 'token') : ([0], [1]),
      ('token', 'is_left_param_of', 'token') : ([1], [2]),
      ('token', 'is_right_param_of', 'token') : ([1], [3]),
      ('token', 'has_value_of', 'token') : ([2, 3], [4, 5]),
